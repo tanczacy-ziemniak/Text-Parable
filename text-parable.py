@@ -41,7 +41,7 @@ achievements = {}
 door_knock_count = 0
 
 def safe_addstr(stdscr, y, x, text, attr=None):
-    """Safely add a string to stdscr, ignoring errors if out-of-bounds."""
+    """Safely adds a string to stdscr, ignoring errors if out-of-bounds."""
     try:
         if attr:
             stdscr.addstr(y, x, text, attr)
@@ -96,14 +96,14 @@ def stream_text(stdscr, text, delay=0.02, start_y=0, start_x=0):
 def display_menu(stdscr, choices, start_y):
     """
     Displays a menu of choices centered on the screen.
-    Navigation is done with arrow keys; selection with ENTER.
+    Navigation is done with the arrow keys and selection with Enter.
     Returns the index of the chosen option.
     """
     current_idx = 0
     n_choices = len(choices)
     header_text = "Use the UP and DOWN arrow keys to navigate and ENTER to select:"
     h, w = stdscr.getmaxyx()
-    menu_lines = 1 + n_choices
+    menu_lines = 1 + n_choices  # header plus one line per choice
 
     while True:
         for i in range(menu_lines):
@@ -150,42 +150,114 @@ def title_screen_main_menu(stdscr):
 
 def achievements_screen(stdscr):
     """
-    Displays the achievements screen.
-    For each achievement (endings and funny achievements), if it is unlocked, display its name.
-    Otherwise, display a fixed placeholder "??????????".
+    Displays the achievements screen using a scrollable pad.
+    For each achievement (endings and funny achievements), if it is unlocked,
+    display its name; otherwise, display a fixed placeholder "??????????".
+    The user can scroll using the UP/DOWN arrow keys.
     """
     stdscr.clear()
     h, w = stdscr.getmaxyx()
-    title = "Achievements"
-    safe_addstr(stdscr, 1, (w - len(title)) // 2, title, curses.A_BOLD | curses.A_UNDERLINE)
     
-    y = 3
-    header_endings = "Endings Achieved:"
-    safe_addstr(stdscr, y, (w - len(header_endings)) // 2, header_endings, curses.A_BOLD)
-    y += 2
+    # Check if window is too small
+    if h < 10 or w < 30:
+        stdscr.clear()
+        try:
+            stdscr.addstr(0, 0, "Window too small")
+            stdscr.addstr(1, 0, "Press any key to return")
+            stdscr.refresh()
+        except curses.error:
+            pass
+        stdscr.getch()
+        return
+    
+    # Display a loading message while we prepare the pad
+    try:
+        stdscr.addstr(0, 0, "Loading achievements...")
+        stdscr.refresh()
+    except curses.error:
+        pass
+    
+    # Build the list of lines to display.
+    lines = []
+    lines.append("")
+    footer = "Use UP/DOWN to scroll; press any other key to return to the main menu."
+    lines.append(footer.center(w))
+    lines.append("")
+    lines.append("Achievements".center(w))
+    lines.append("")
+    lines.append("Endings Achieved:".center(w))
+    lines.append("")
     for ach_id, display_name in ENDING_DATA:
         if achievements.get(ach_id, False):
-            text_line = display_name
+            line = display_name
         else:
-            text_line = "??????????"
-        safe_addstr(stdscr, y, (w - len(text_line)) // 2, text_line)
-        y += 1
-    y += 2
-    header_funny = "Other Achievements:"
-    safe_addstr(stdscr, y, (w - len(header_funny)) // 2, header_funny, curses.A_BOLD)
-    y += 2
+            line = "??????????"
+        lines.append(line.center(w))
+    lines.append("")
+    lines.append("Other Achievements:".center(w))
+    lines.append("")
     for ach_id, display_name in FUNNY_ACHIEVEMENTS:
         if achievements.get(ach_id, False):
-            text_line = display_name
+            line = display_name
         else:
-            text_line = "??????????"
-        safe_addstr(stdscr, y, (w - len(text_line)) // 2, text_line)
-        y += 1
+            line = "??????????"
+        lines.append(line.center(w))
+    lines.append("")
+    
+    
+    pad_height = len(lines)
+    pad = curses.newpad(pad_height, w)
+    for idx, line in enumerate(lines):
+        try:
+            pad.addstr(idx, 0, line)
+        except curses.error:
+            pass
 
-    prompt = "Press any key to return to the main menu..."
-    safe_addstr(stdscr, y+1, (w - len(prompt)) // 2, prompt)
+    # Clear the screen before showing pad
+    stdscr.clear()
     stdscr.refresh()
-    stdscr.getch()
+    
+    offset = 0
+    
+    # Safe pad refresh function that handles all edge cases
+    def refresh_pad():
+        try:
+            # Make sure we don't try to show more lines than we have in our pad
+            visible_height = min(h-1, pad_height-offset)
+            if visible_height > 0:  # Only refresh if we have something to show
+                pad.refresh(offset, 0, 0, 0, visible_height, w-1)
+        except curses.error:
+            # If we hit an error, try a more conservative approach
+            try:
+                pad.refresh(offset, 0, 0, 0, h-1, w-1)
+            except curses.error:
+                # If still failing, try minimal display
+                try:
+                    pad.refresh(offset, 0, 0, 0, 0, 0)
+                except curses.error:
+                    pass
+    
+    # Initial display - make sure this happens
+    refresh_pad()
+    curses.doupdate()  # Force an update to the physical screen
+    
+    # Wait for user input
+    while True:
+        key = stdscr.getch()
+        if key == curses.KEY_UP:
+            offset = max(0, offset - 1)
+            refresh_pad()
+        elif key == curses.KEY_DOWN:
+            offset = min(pad_height - h, offset + 1)
+            # Don't let offset go negative if pad is smaller than screen
+            offset = max(0, offset)
+            refresh_pad()
+        else:
+            break
+
+def achievements_screen_old(stdscr):
+    # Old version (non-scrollable) kept here for reference.
+    pass
 
 class StoryNode:
     def __init__(self, description, choices=None, ending=None, ending_id=None):

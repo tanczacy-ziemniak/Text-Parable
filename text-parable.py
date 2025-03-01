@@ -8,37 +8,47 @@ import os
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ACHIEVEMENTS_FILE = os.path.join(SCRIPT_DIR, "achievements.json")
 
-# List of ending achievements (ID, Display Name).
+# List of ending achievements: (ID, Display Name)
 ENDING_DATA = [
-    ("silent_worker", "Silent Worker"),
-    ("curiosity_cost", "Curiosity's Cost"),
-    ("conformity_comfort", "Conformity's Comfort"),
-    ("corporate_conspiracy", "Corporate Conspiracy"),
+    ("silent_worker", "Silent_Worker"),
+    ("curiosity_cost", "Curiosity_Cost"),
+    ("conformity_comfort", "Conformity_Comfort"),
+    ("corporate_conspiracy", "Corporate_Conspiracy"),
     ("awakened", "Awakened"),
-    ("ignorance_bliss", "Ignorance is Bliss"),
-    ("rebellion_unleashed", "Rebellion Unleashed"),
-    ("silent_bystander", "Silent Bystander"),
-    ("eternal_worker", "Eternal Worker"),
-    ("secret_society", "Secret Society"),
-    ("lost_labyrinth", "Lost in the Labyrinth"),
-    ("desperate_escape", "Desperate Escape"),
-    ("hope_amidst_chaos", "Hope Amidst Chaos")
+    ("ignorance_bliss", "Ignorance_Bliss"),
+    ("rebellion_unleashed", "Rebellion_Unleashed"),
+    ("silent_bystander", "Silent_Bystander"),
+    ("eternal_worker", "Eternal_Worker"),
+    ("secret_society", "Secret_Society"),
+    ("lost_labyrinth", "Lost_Labyrinth"),
+    ("desperate_escape", "Desperate_Escape"),
+    ("hope_amidst_chaos", "Hope_Amidst_Chaos")
 ]
 
-# Funny achievements (ID, Display Name).
+# Funny achievements: (ID, Display Name)
 FUNNY_ACHIEVEMENTS = [
-    ("persistent_knocker", "Persistent Knocker"),
-    ("paperclip_hoarder", "Paperclip Hoarder"),
-    ("chair_spinner", "Chair Spinner"),
-    ("water_cooler_chat", "Water Cooler Conversationalist"),
-    ("over_caffeinated", "Over Caffeinated")
+    ("persistent_knocker", "Persistent_Knocker"),
+    ("paperclip_hoarder", "Paperclip_Hoarder"),
+    ("chair_spinner", "Chair_Spinner"),
+    ("water_cooler_chat", "Water_Cooler_Chat"),
+    ("over_caffeinated", "Over_Caffeinated")
 ]
 
-# Global achievements dictionary (achievement ID -> bool).
+# Global achievements dictionary (achievement ID -> bool)
 achievements = {}
 
 # Global counter for door knocks.
 door_knock_count = 0
+
+def safe_addstr(stdscr, y, x, text, attr=None):
+    """Safely add a string to stdscr, ignoring errors if out-of-bounds."""
+    try:
+        if attr:
+            stdscr.addstr(y, x, text, attr)
+        else:
+            stdscr.addstr(y, x, text)
+    except curses.error:
+        pass
 
 def load_achievements():
     global achievements
@@ -47,13 +57,9 @@ def load_achievements():
             with open(ACHIEVEMENTS_FILE, "r") as f:
                 achievements = json.load(f)
         except Exception:
-            achievements = {ending_id: False for ending_id, _ in ENDING_DATA}
-            for ach_id, _ in FUNNY_ACHIEVEMENTS:
-                achievements[ach_id] = False
+            achievements = {ach_id: False for ach_id, _ in (ENDING_DATA + FUNNY_ACHIEVEMENTS)}
     else:
-        achievements = {ending_id: False for ending_id, _ in ENDING_DATA}
-        for ach_id, _ in FUNNY_ACHIEVEMENTS:
-            achievements[ach_id] = False
+        achievements = {ach_id: False for ach_id, _ in (ENDING_DATA + FUNNY_ACHIEVEMENTS)}
 
 def save_achievements():
     global achievements
@@ -63,15 +69,25 @@ def save_achievements():
 def stream_text(stdscr, text, delay=0.02, start_y=0, start_x=0):
     """
     Streams text with a typewriter effect.
+    Checks terminal dimensions to avoid printing out-of-bounds.
     Returns the final y coordinate after printing.
     """
+    max_y, max_x = stdscr.getmaxyx()
     y, x = start_y, start_x
     for char in text:
         if char == "\n":
             y += 1
             x = start_x
         else:
-            stdscr.addstr(y, x, char)
+            if x >= max_x:
+                y += 1
+                x = start_x
+            if y >= max_y:
+                break
+            try:
+                stdscr.addstr(y, x, char)
+            except curses.error:
+                pass
             x += 1
         stdscr.refresh()
         time.sleep(delay)
@@ -80,54 +96,53 @@ def stream_text(stdscr, text, delay=0.02, start_y=0, start_x=0):
 def display_menu(stdscr, choices, start_y):
     """
     Displays a menu of choices centered on the screen.
-    Navigation is done with the arrow keys and selection with Enter.
+    Navigation is done with arrow keys; selection with ENTER.
     Returns the index of the chosen option.
     """
     current_idx = 0
     n_choices = len(choices)
     header_text = "Use the UP and DOWN arrow keys to navigate and ENTER to select:"
     h, w = stdscr.getmaxyx()
-    menu_lines = 1 + n_choices  # header plus one line per choice
+    menu_lines = 1 + n_choices
 
     while True:
-        # Clear only the menu area.
         for i in range(menu_lines):
             stdscr.move(start_y + i, 0)
             stdscr.clrtoeol()
         header_x = (w - len(header_text)) // 2
-        stdscr.addstr(start_y, header_x, header_text)
+        safe_addstr(stdscr, start_y, header_x, header_text)
         for i, choice in enumerate(choices):
             choice_x = (w - len(choice)) // 2
             if i == current_idx:
-                stdscr.addstr(start_y + 1 + i, choice_x, choice, curses.A_REVERSE)
+                safe_addstr(stdscr, start_y + 1 + i, choice_x, choice, curses.A_REVERSE)
             else:
-                stdscr.addstr(start_y + 1 + i, choice_x, choice)
+                safe_addstr(stdscr, start_y + 1 + i, choice_x, choice)
         stdscr.refresh()
         key = stdscr.getch()
         if key == curses.KEY_UP:
             current_idx = (current_idx - 1) % n_choices
         elif key == curses.KEY_DOWN:
             current_idx = (current_idx + 1) % n_choices
-        elif key in [10, 13]:  # Enter key
+        elif key in [10, 13]:
             return current_idx
 
 def title_screen_main_menu(stdscr):
     """
     Displays the title screen with game title, subtitle, and credits.
-    Then shows the main menu options centered on the screen and returns the selected option.
+    Then shows the main menu options centered on the screen.
+    Returns the selected option.
     """
     stdscr.clear()
     h, w = stdscr.getmaxyx()
     title = "Text Parable"
     subtitle = "A Stanley Parable-Inspired Text Adventure"
     credits = "Made by: tanczacy-ziemniak"
-    stdscr.addstr(h//2 - 4, (w - len(title)) // 2, title, curses.A_BOLD)
-    stdscr.addstr(h//2 - 3, (w - len(subtitle)) // 2, subtitle)
-    stdscr.addstr(h//2 - 2, (w - len(credits)) // 2, credits)
+    safe_addstr(stdscr, h//2 - 4, (w - len(title)) // 2, title, curses.A_BOLD)
+    safe_addstr(stdscr, h//2 - 3, (w - len(subtitle)) // 2, subtitle)
+    safe_addstr(stdscr, h//2 - 2, (w - len(credits)) // 2, credits)
     stdscr.refresh()
-    time.sleep(1)  # Brief pause for effect
+    time.sleep(1)
     
-    # Main menu options.
     options = ["Start Game", "Achievements", "Exit"]
     menu_start_y = h//2
     choice_idx = display_menu(stdscr, options, menu_start_y)
@@ -135,49 +150,45 @@ def title_screen_main_menu(stdscr):
 
 def achievements_screen(stdscr):
     """
-    Displays the achievements screen. Endings and funny achievements are shown in two sections.
-    For each achievement, if it is unlocked, display:
-      Achievement_ID (in Title Case), Achieved
-    Otherwise, display:
-      Achievement_ID (in Title Case), ??????
+    Displays the achievements screen.
+    For each achievement (endings and funny achievements), if it is unlocked, display its name.
+    Otherwise, display a fixed placeholder "??????????".
     """
     stdscr.clear()
     h, w = stdscr.getmaxyx()
     title = "Achievements"
-    stdscr.addstr(1, (w - len(title)) // 2, title, curses.A_BOLD | curses.A_UNDERLINE)
+    safe_addstr(stdscr, 1, (w - len(title)) // 2, title, curses.A_BOLD | curses.A_UNDERLINE)
     
     y = 3
     header_endings = "Endings Achieved:"
-    stdscr.addstr(y, (w - len(header_endings)) // 2, header_endings, curses.A_BOLD)
+    safe_addstr(stdscr, y, (w - len(header_endings)) // 2, header_endings, curses.A_BOLD)
     y += 2
-    for ach_id, _ in ENDING_DATA:
-        display_status = "Achieved" if achievements.get(ach_id, False) else "??????"
-        text_line = f"{ach_id.title()}, {display_status}"
-        stdscr.addstr(y, (w - len(text_line)) // 2, text_line)
+    for ach_id, display_name in ENDING_DATA:
+        if achievements.get(ach_id, False):
+            text_line = display_name
+        else:
+            text_line = "??????????"
+        safe_addstr(stdscr, y, (w - len(text_line)) // 2, text_line)
         y += 1
     y += 2
     header_funny = "Other Achievements:"
-    stdscr.addstr(y, (w - len(header_funny)) // 2, header_funny, curses.A_BOLD)
+    safe_addstr(stdscr, y, (w - len(header_funny)) // 2, header_funny, curses.A_BOLD)
     y += 2
-    for ach_id, _ in FUNNY_ACHIEVEMENTS:
-        display_status = "Achieved" if achievements.get(ach_id, False) else "??????"
-        text_line = f"{ach_id.title()}, {display_status}"
-        stdscr.addstr(y, (w - len(text_line)) // 2, text_line)
+    for ach_id, display_name in FUNNY_ACHIEVEMENTS:
+        if achievements.get(ach_id, False):
+            text_line = display_name
+        else:
+            text_line = "??????????"
+        safe_addstr(stdscr, y, (w - len(text_line)) // 2, text_line)
         y += 1
 
     prompt = "Press any key to return to the main menu..."
-    stdscr.addstr(y+1, (w - len(prompt)) // 2, prompt)
+    safe_addstr(stdscr, y+1, (w - len(prompt)) // 2, prompt)
     stdscr.refresh()
     stdscr.getch()
 
 class StoryNode:
     def __init__(self, description, choices=None, ending=None, ending_id=None):
-        """
-        :param description: The narrative text for this scene.
-        :param choices: A dictionary mapping choice texts to StoryNode objects.
-        :param ending: The ending message (if terminal).
-        :param ending_id: Unique identifier for the ending.
-        """
         self.description = description
         self.choices = choices or {}
         self.ending = ending
@@ -186,20 +197,19 @@ class StoryNode:
     def play(self, stdscr):
         stdscr.clear()
         final_y = stream_text(stdscr, self.description + "\n", delay=0.02, start_y=0, start_x=0)
-        stdscr.addstr(final_y + 1, 0, "Press any key to see your choices...")
+        safe_addstr(stdscr, final_y + 1, 0, "Press any key to see your choices...")
         stdscr.refresh()
         stdscr.getch()
 
         if self.ending:
-            # Record the ending achievement.
             if self.ending_id:
                 achievements[self.ending_id] = True
                 save_achievements()
             stream_text(stdscr, f"\n--- {self.ending} ---\n")
-            stdscr.addstr("\nPress any key to return to the main menu...")
+            safe_addstr(stdscr, 0, 0, "\nPress any key to return to the main menu...")
             stdscr.refresh()
             stdscr.getch()
-            return  # Return to the main menu
+            return
 
         menu_start_y = final_y + 3
         selected_idx = display_menu(stdscr, list(self.choices.keys()), menu_start_y)
@@ -208,11 +218,6 @@ class StoryNode:
         next_node.play(stdscr)
 
 class KnockDoorNode(StoryNode):
-    """
-    A special node for knocking on the door.
-    Increments a global counter and, upon reaching five knocks, unlocks the "Persistent Knocker" achievement.
-    Then returns the player to the boss's office.
-    """
     def __init__(self, return_node):
         self.return_node = return_node
 
@@ -224,17 +229,13 @@ class KnockDoorNode(StoryNode):
         if door_knock_count >= 5 and not achievements.get("persistent_knocker", False):
             achievements["persistent_knocker"] = True
             save_achievements()
-            stream_text(stdscr, "\nAchievement Unlocked: Persistent Knocker!\n", 0.02, 0, 0)
-        stdscr.addstr("\nPress any key to return to the boss's office...")
+            stream_text(stdscr, "\nAchievement Unlocked: Persistent_Knocker!\n", 0.02, 0, 0)
+        safe_addstr(stdscr, 0, 0, "\nPress any key to return to the boss's office...")
         stdscr.refresh()
         stdscr.getch()
         self.return_node.play(stdscr)
 
 class FunnyAchievementNode(StoryNode):
-    """
-    A node for unlocking funny achievements.
-    Displays a message, unlocks the achievement if not already unlocked, then returns to the designated node.
-    """
     def __init__(self, achievement_id, achievement_name, message, return_node):
         self.achievement_id = achievement_id
         self.achievement_name = achievement_name
@@ -247,20 +248,14 @@ class FunnyAchievementNode(StoryNode):
         if not achievements.get(self.achievement_id, False):
             achievements[self.achievement_id] = True
             save_achievements()
-            stream_text(stdscr, f"\nAchievement Unlocked: {self.achievement_name.title()}!\n", 0.02, 0, 0)
-        stdscr.addstr("\nPress any key to return...")
+            stream_text(stdscr, f"\nAchievement Unlocked: {self.achievement_name}!\n", 0.02, 0, 0)
+        safe_addstr(stdscr, 0, 0, "\nPress any key to return...")
         stdscr.refresh()
         stdscr.getch()
         self.return_node.play(stdscr)
 
 def game_narrative(stdscr):
-    """
-    Builds and starts the story. After an ending is reached, the function returns to the main menu.
-    """
-
     # --- Follow Narrator Branch ---
-
-    # Meeting Room Endings
     ending_silent_worker = StoryNode(
         description="You sit down and surrender to the hypnotic drone of the presentation.",
         ending="Ending: Silent Worker\nYou spent your day in quiet compliance.",
@@ -282,7 +277,6 @@ def game_narrative(stdscr):
         ending_id="corporate_conspiracy"
     )
 
-    # Intermediate nodes for Meeting Room Branch
     meeting_room_clues = StoryNode(
         description="In the meeting room, your eyes wander over peculiar symbols flickering behind the projector.",
         choices={
@@ -292,33 +286,27 @@ def game_narrative(stdscr):
     )
     return_to_meeting_room = StoryNode(
         description="Deciding not to meddle with secrets you aren't ready to face, you return to the meeting room.",
-        choices={"Continue": None}  # Will link later.
+        choices={"Continue": None}
     )
     meeting_room_drawer = StoryNode(
-        description=(
-            "While seated, you notice a small desk drawer left slightly ajar. "
-            "Inside, a dusty file lies hidden, filled with cryptic memos and blueprints."
-        ),
+        description=("While seated, you notice a small desk drawer left slightly ajar. "
+                     "Inside, a dusty file lies hidden, filled with cryptic memos and blueprints."),
         choices={
             "Read the file thoroughly": ending_corporate_conspiracy,
             "Leave it untouched": return_to_meeting_room
         }
     )
-    # New funny option in the meeting room.
-    # "Chat with the water cooler" unlocks the Water Cooler Conversationalist achievement.
     meeting_room = StoryNode(
         description="You enter the meeting room. The narrator instructs you to take a seat as the presentation begins.",
         choices={
             "Sit down and comply": ending_silent_worker,
             "Look around for clues": meeting_room_clues,
             "Inspect the desk drawer": meeting_room_drawer,
-            "Chat with the water cooler": FunnyAchievementNode("water_cooler_chat", "water cooler chat",
+            "Chat with the water cooler": FunnyAchievementNode("water_cooler_chat", "Water_Cooler_Chat",
                                                               "You strike up a chat with the lonely water cooler.", None)
         }
     )
-    # Link the return option back to meeting_room.
     return_to_meeting_room.choices["Continue"] = meeting_room
-    # For the funny node above, set its return_node to meeting_room.
     meeting_room.choices["Chat with the water cooler"].return_node = meeting_room
 
     # --- Boss's Office Branch ---
@@ -332,7 +320,6 @@ def game_narrative(stdscr):
         ending="Ending: Ignorance is Bliss\nSome mysteries are best left unexplored.",
         ending_id="ignorance_bliss"
     )
-    # New branch via eavesdropping.
     ending_rebellion_unleashed = StoryNode(
         description="You confront shadowy figures outside, sparking a volatile rebellion.",
         ending="Ending: Rebellion Unleashed\nYou shatter the silence with your defiance.",
@@ -357,20 +344,17 @@ def game_narrative(stdscr):
             "Retreat silently": ending_silent_bystander
         }
     )
-    # Boss office now includes the knock action and a new funny option.
     boss_office = StoryNode(
         description="You approach the boss's office. The door is slightly ajar, inviting yet mysterious.",
         choices={
             "Push the door open and enter": boss_office_inside,
-            "Knock on the door": None,  # Will set to a KnockDoorNode.
+            "Knock on the door": None,
             "Wait outside and eavesdrop": eavesdrop,
-            "Grab a cup of coffee": FunnyAchievementNode("over_caffeinated", "over caffeinated",
+            "Grab a cup of coffee": FunnyAchievementNode("over_caffeinated", "Over_Caffeinated",
                                                           "You grab a cup of coffee from a nearby machine and feel a surge of energy.", None)
         }
     )
-    # Set the "Knock on the door" option.
     boss_office.choices["Knock on the door"] = KnockDoorNode(boss_office)
-    # Set the return for the coffee node.
     boss_office.choices["Grab a cup of coffee"].return_node = boss_office
 
     follow_narrator = StoryNode(
@@ -421,31 +405,24 @@ def game_narrative(stdscr):
             "Call for help": ending_hope_amidst_chaos
         }
     )
-    # New funny options in the Disobey branch.
-    # "Fidget with paperclips" unlocks the Paperclip Hoarder achievement.
-    # "Spin in your chair" unlocks the Chair Spinner achievement.
     stay_at_desk = StoryNode(
         description="You decide to defy the call, remaining at your desk despite the emptiness around you.",
         choices={
             "Keep working mindlessly": ending_eternal_worker,
             "Eventually, explore the corridors": explore_corridors,
             "Attempt to leave the building": escape_attempt,
-            "Fidget with paperclips": FunnyAchievementNode("paperclip_hoarder", "paperclip hoarder",
+            "Fidget with paperclips": FunnyAchievementNode("paperclip_hoarder", "Paperclip_Hoarder",
                                                             "You absent-mindedly fidget with a pile of paperclips.", None),
-            "Spin in your chair": FunnyAchievementNode("chair_spinner", "chair spinner",
+            "Spin in your chair": FunnyAchievementNode("chair_spinner", "Chair_Spinner",
                                                          "You spin in your chair, laughing at your own dizziness.", None)
         }
     )
-    # Set the return for the funny nodes to stay_at_desk.
     stay_at_desk.choices["Fidget with paperclips"].return_node = stay_at_desk
     stay_at_desk.choices["Spin in your chair"].return_node = stay_at_desk
 
-    # --- Starting Node ---
     start = StoryNode(
-        description=(
-            "Stanley wakes up at his desk in an eerily empty office. A calm yet authoritative narrator echoes:\n"
-            "'It is time to work... or is it?'"
-        ),
+        description=("Stanley wakes up at his desk in an eerily empty office. A calm yet authoritative narrator echoes:\n"
+                     "'It is time to work... or is it?'"),
         choices={
             "Follow the narrator's instructions": follow_narrator,
             "Disobey and remain at your desk": stay_at_desk
